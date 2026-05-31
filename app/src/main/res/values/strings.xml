@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Video Reminder Overlay</string>
+    <string name="accessibility_description">Mendeteksi ketika aplikasi tertentu dibuka untuk menampilkan pengingat video</string>
+    <string name="channel_name">Video Reminder Service</string>
+    <string name="channel_desc">Service yang berjalan untuk mendeteksi aplikasi dan menampilkan pengingat</string>
+</resources>
