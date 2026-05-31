@@ -22,9 +22,9 @@ import android.widget.TextView;
 import android.widget.VideoView;
 import android.animation.ObjectAnimator;
 import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
 
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.ServiceCompat;
 
 public class OverlayService extends Service {
 
@@ -51,10 +51,8 @@ public class OverlayService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // Fix Android 14+: wajib pakai RECEIVER_NOT_EXPORTED atau RECEIVER_EXPORTED
         IntentFilter showFilter = new IntentFilter(AppConstants.ACTION_SHOW_OVERLAY);
         IntentFilter hideFilter = new IntentFilter(AppConstants.ACTION_HIDE_OVERLAY);
 
@@ -97,13 +95,19 @@ public class OverlayService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
-        // Fix Android 14+: pakai ServiceCompat.startForeground dengan tipe yang benar
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceCompat.startForeground(
-                    this,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+ (termasuk Android 16): wajib SPECIAL_USE
+            startForeground(
                     AppConstants.NOTIFICATION_ID,
                     notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            );
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Android 10-13
+            startForeground(
+                    AppConstants.NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             );
         } else {
             startForeground(AppConstants.NOTIFICATION_ID, notification);
@@ -179,7 +183,6 @@ public class OverlayService extends Service {
         });
 
         setupDragToDismiss(overlayView);
-
         windowManager.addView(overlayView, params);
         isOverlayShowing = true;
 
