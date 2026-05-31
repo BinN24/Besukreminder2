@@ -16,7 +16,7 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
-import android.media.MediaController;
+import android.widget.MediaController;
 
 import androidx.appcompat.app.AppCompatActivity;
 
