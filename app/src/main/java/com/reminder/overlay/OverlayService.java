@@ -15,18 +15,16 @@ import android.os.Build;
 import android.os.IBinder;
 import android.view.Gravity;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.VideoView;
-import android.media.MediaPlayer;
-import android.content.SharedPreferences;
 import android.animation.ObjectAnimator;
-import android.animation.AnimatorSet;
+import android.content.SharedPreferences;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
 
 public class OverlayService extends Service {
 
@@ -56,18 +54,22 @@ public class OverlayService extends Service {
 
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
 
-        // Register broadcast receivers
+        // Fix Android 14+: wajib pakai RECEIVER_NOT_EXPORTED atau RECEIVER_EXPORTED
         IntentFilter showFilter = new IntentFilter(AppConstants.ACTION_SHOW_OVERLAY);
-        registerReceiver(showOverlayReceiver, showFilter);
-
         IntentFilter hideFilter = new IntentFilter(AppConstants.ACTION_HIDE_OVERLAY);
-        registerReceiver(hideOverlayReceiver, hideFilter);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(showOverlayReceiver, showFilter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(hideOverlayReceiver, hideFilter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(showOverlayReceiver, showFilter);
+            registerReceiver(hideOverlayReceiver, hideFilter);
+        }
 
         startForegroundWithNotification();
     }
 
     private void startForegroundWithNotification() {
-        // Buat notification channel
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     AppConstants.CHANNEL_ID,
@@ -81,7 +83,6 @@ public class OverlayService extends Service {
             nm.createNotificationChannel(channel);
         }
 
-        // Intent untuk buka app saat klik notifikasi
         Intent notifIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this, 0, notifIntent,
@@ -96,7 +97,17 @@ public class OverlayService extends Service {
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
 
-        startForeground(AppConstants.NOTIFICATION_ID, notification);
+        // Fix Android 14+: pakai ServiceCompat.startForeground dengan tipe yang benar
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ServiceCompat.startForeground(
+                    this,
+                    AppConstants.NOTIFICATION_ID,
+                    notification,
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            );
+        } else {
+            startForeground(AppConstants.NOTIFICATION_ID, notification);
+        }
     }
 
     private void showOverlay(String appName) {
@@ -109,11 +120,9 @@ public class OverlayService extends Service {
 
         if (videoPath.isEmpty()) return;
 
-        // Inflate overlay layout
         LayoutInflater inflater = LayoutInflater.from(this);
         overlayView = inflater.inflate(R.layout.overlay_video, null);
 
-        // Setup WindowManager params - muncul di atas SEMUA aplikasi
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -126,14 +135,12 @@ public class OverlayService extends Service {
         );
         params.gravity = Gravity.TOP | Gravity.START;
 
-        // Set text
         TextView tvTitle = overlayView.findViewById(R.id.tvOverlayTitle);
         TextView tvMessage = overlayView.findViewById(R.id.tvOverlayMessage);
         tvTitle.setText(title);
         tvMessage.setText(appName != null ?
                 "Kamu baru saja buka " + appName + ". " + message : message);
 
-        // Setup video
         overlayVideoView = overlayView.findViewById(R.id.overlayVideoView);
         Uri videoUri = Uri.parse(videoPath);
         overlayVideoView.setVideoURI(videoUri);
@@ -141,38 +148,29 @@ public class OverlayService extends Service {
             mp.setLooping(true);
             overlayVideoView.start();
         });
-        overlayVideoView.setOnErrorListener((mp, what, extra) -> {
-            // Video error - tetap tampilkan overlay tanpa video
-            return true;
-        });
+        overlayVideoView.setOnErrorListener((mp, what, extra) -> true);
 
-        // Tombol tutup (X)
         TextView tvClose = overlayView.findViewById(R.id.tvClose);
         tvClose.setOnClickListener(v -> hideOverlay());
 
-        // Tombol "Pergi Sekarang" - tutup overlay dan biarkan user keluar
         Button btnGoNow = overlayView.findViewById(R.id.btnGoNow);
         btnGoNow.setOnClickListener(v -> {
             hideOverlay();
-            // Buka home screen
             Intent homeIntent = new Intent(Intent.ACTION_MAIN);
             homeIntent.addCategory(Intent.CATEGORY_HOME);
             homeIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(homeIntent);
         });
 
-        // Tombol Snooze - tunda 15 menit
         Button btnSnooze = overlayView.findViewById(R.id.btnSnooze);
         btnSnooze.setOnClickListener(v -> {
-            long snoozeUntil = System.currentTimeMillis() + (15 * 60 * 1000); // 15 menit
+            long snoozeUntil = System.currentTimeMillis() + (15 * 60 * 1000);
             prefs.edit().putLong(AppConstants.KEY_SNOOZE_UNTIL, snoozeUntil).apply();
             hideOverlay();
         });
 
-        // Tombol Abaikan Hari Ini
         Button btnDismiss = overlayView.findViewById(R.id.btnDismiss);
         btnDismiss.setOnClickListener(v -> {
-            // Simpan dismissed hari ini
             String today = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + "-" +
                     java.util.Calendar.getInstance().get(java.util.Calendar.MONTH) + "-" +
                     java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_MONTH);
@@ -180,14 +178,11 @@ public class OverlayService extends Service {
             hideOverlay();
         });
 
-        // Setup drag to dismiss (swipe down)
         setupDragToDismiss(overlayView);
 
-        // Tambahkan ke window
         windowManager.addView(overlayView, params);
         isOverlayShowing = true;
 
-        // Animasi masuk - slide dari bawah
         View container = overlayView.findViewById(R.id.overlayContainer);
         container.setTranslationY(1000f);
         container.animate()
@@ -196,25 +191,13 @@ public class OverlayService extends Service {
                 .setInterpolator(new android.view.animation.DecelerateInterpolator())
                 .start();
 
-        // Animasi kedip pada icon peringatan
         startWarningBlink(overlayView.findViewById(R.id.tvWarningIcon));
     }
 
     private void setupDragToDismiss(View overlay) {
         View container = overlay.findViewById(R.id.overlayContainer);
-        final float[] startY = {0};
-        final float[] startTranslation = {0};
-
-        // Background hitam - klik untuk tutup
-        overlay.setOnClickListener(v -> {
-            // Klik luar area container = tutup
-            hideOverlay();
-        });
-
-        // Container - intercept klik agar tidak tutup
-        container.setOnClickListener(v -> {
-            // Do nothing - jangan tutup
-        });
+        overlay.setOnClickListener(v -> hideOverlay());
+        container.setOnClickListener(v -> {});
     }
 
     private void startWarningBlink(View view) {
@@ -228,7 +211,6 @@ public class OverlayService extends Service {
     private void hideOverlay() {
         if (!isOverlayShowing || overlayView == null) return;
 
-        // Animasi keluar - slide ke bawah
         View container = overlayView.findViewById(R.id.overlayContainer);
         if (container != null) {
             container.animate()
@@ -236,14 +218,8 @@ public class OverlayService extends Service {
                     .setDuration(300)
                     .setInterpolator(new android.view.animation.AccelerateInterpolator())
                     .withEndAction(() -> {
-                        // Stop video
-                        if (overlayVideoView != null) {
-                            overlayVideoView.stopPlayback();
-                        }
-                        // Remove dari window
-                        try {
-                            windowManager.removeView(overlayView);
-                        } catch (Exception ignored) {}
+                        if (overlayVideoView != null) overlayVideoView.stopPlayback();
+                        try { windowManager.removeView(overlayView); } catch (Exception ignored) {}
                         overlayView = null;
                         isOverlayShowing = false;
                     })
