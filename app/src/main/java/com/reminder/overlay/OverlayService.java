@@ -24,7 +24,7 @@ import android.animation.ObjectAnimator;
 import android.content.SharedPreferences;
 
 import androidx.core.app.NotificationCompat;
-import androidx.core.app.ServiceCompat;
+
 
 public class OverlayService extends Service {
 
@@ -89,7 +89,7 @@ public class OverlayService extends Service {
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { // Android 10+
             ServiceCompat.startForeground(
                     this,
                     AppConstants.NOTIFICATION_ID,
