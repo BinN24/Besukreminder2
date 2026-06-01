@@ -9,10 +9,13 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
 import android.graphics.PixelFormat;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.animation.ObjectAnimator;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -20,11 +23,8 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.VideoView;
-import android.animation.ObjectAnimator;
-import android.content.SharedPreferences;
 
 import androidx.core.app.NotificationCompat;
-
 
 public class OverlayService extends Service {
 
@@ -77,10 +77,12 @@ public class OverlayService extends Service {
             NotificationManager nm = getSystemService(NotificationManager.class);
             nm.createNotificationChannel(channel);
         }
+
         Intent notifIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this, 0, notifIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Notification notification = new NotificationCompat.Builder(this, AppConstants.CHANNEL_ID)
                 .setContentTitle("Video Reminder Aktif")
                 .setContentText("Mendeteksi aplikasi TikTok/Instagram...")
@@ -89,13 +91,10 @@ public class OverlayService extends Service {
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .build();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { // Android 10+
-            ServiceCompat.startForeground(
-                    this,
-                    AppConstants.NOTIFICATION_ID,
-                    notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            );
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(AppConstants.NOTIFICATION_ID, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
         } else {
             startForeground(AppConstants.NOTIFICATION_ID, notification);
         }
@@ -108,8 +107,10 @@ public class OverlayService extends Service {
         String title = prefs.getString(AppConstants.KEY_TITLE, "STOP! Kamu harus ingat sesuatu!");
         String message = prefs.getString(AppConstants.KEY_MESSAGE, "Jangan lupa tugasmu!");
         if (videoPath.isEmpty()) return;
+
         LayoutInflater inflater = LayoutInflater.from(this);
         overlayView = inflater.inflate(R.layout.overlay_video, null);
+
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
@@ -121,11 +122,13 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT
         );
         params.gravity = Gravity.TOP | Gravity.START;
+
         TextView tvTitle = overlayView.findViewById(R.id.tvOverlayTitle);
         TextView tvMessage = overlayView.findViewById(R.id.tvOverlayMessage);
         tvTitle.setText(title);
         tvMessage.setText(appName != null ?
                 "Kamu baru saja buka " + appName + ". " + message : message);
+
         overlayVideoView = overlayView.findViewById(R.id.overlayVideoView);
         Uri videoUri = Uri.parse(videoPath);
         overlayVideoView.setVideoURI(videoUri);
@@ -134,8 +137,10 @@ public class OverlayService extends Service {
             overlayVideoView.start();
         });
         overlayVideoView.setOnErrorListener((mp, what, extra) -> true);
+
         TextView tvClose = overlayView.findViewById(R.id.tvClose);
         tvClose.setOnClickListener(v -> hideOverlay());
+
         Button btnGoNow = overlayView.findViewById(R.id.btnGoNow);
         btnGoNow.setOnClickListener(v -> {
             hideOverlay();
@@ -144,12 +149,14 @@ public class OverlayService extends Service {
             homeIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(homeIntent);
         });
+
         Button btnSnooze = overlayView.findViewById(R.id.btnSnooze);
         btnSnooze.setOnClickListener(v -> {
             long snoozeUntil = System.currentTimeMillis() + (15 * 60 * 1000);
             prefs.edit().putLong(AppConstants.KEY_SNOOZE_UNTIL, snoozeUntil).apply();
             hideOverlay();
         });
+
         Button btnDismiss = overlayView.findViewById(R.id.btnDismiss);
         btnDismiss.setOnClickListener(v -> {
             String today = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) + "-" +
@@ -158,9 +165,11 @@ public class OverlayService extends Service {
             prefs.edit().putString(AppConstants.KEY_DISMISSED_TODAY, today).apply();
             hideOverlay();
         });
+
         setupDragToDismiss(overlayView);
         windowManager.addView(overlayView, params);
         isOverlayShowing = true;
+
         View container = overlayView.findViewById(R.id.overlayContainer);
         container.setTranslationY(1000f);
         container.animate()
@@ -168,6 +177,7 @@ public class OverlayService extends Service {
                 .setDuration(400)
                 .setInterpolator(new android.view.animation.DecelerateInterpolator())
                 .start();
+
         startWarningBlink(overlayView.findViewById(R.id.tvWarningIcon));
     }
 
